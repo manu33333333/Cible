@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tir">
+<meta name="theme-color" content="#0e1116">
+<title>Appli Tir</title>
+<style>
+:root{
+  /* Palette : fond graphite, accent ambre pour l'action, bleu/rouge réservés aux impacts */
+  --bg:#0e1116; --panel:#171c24; --line:#2a323d; --fg:#e8ecf1; --mute:#8d98a8;
+  --accent:#f2b134; --accent-fg:#1a1306; --ok:#3fb950; --bad:#f85149;
+  --imp-last:#ff3b3b; --imp-prev:#3d8bff;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:15px/1.35 var(--font);
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;text-align:left;cursor:pointer}
+button:active{filter:brightness(1.25)}
+button:disabled{opacity:.4}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700;text-align:center}
+button.danger{background:#3a1517;border-color:#6b2226;text-align:center}
+button.danger.armed{background:var(--bad);color:#fff}
+.view{display:flex;flex-direction:column;height:100dvh;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);gap:10px}
+.top{display:flex;align-items:center;gap:10px;padding-top:8px}
+.top h1{font-size:19px;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.back{padding:6px 14px;font-size:22px;line-height:1}
+.stat{font-size:12px;color:var(--mute);text-align:right;max-width:40%}
+.scroll{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-bottom:16px;min-height:0}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:8px 0 0}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:10px 14px;text-align:center;background:transparent}
+.seg button.on{background:var(--accent);color:var(--accent-fg);font-weight:700}
+.hint{color:var(--mute);font-size:13px;margin:0}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{padding:8px 14px;text-align:center}
+#stage{position:relative;width:100%;aspect-ratio:1;background:#000;border-radius:6px;overflow:hidden;touch-action:none}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%}
+#stageText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20vw;font-weight:800;color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,.6);font-variant-numeric:tabular-nums;pointer-events:none}
+#stageText.small{align-items:flex-start;justify-content:flex-end;font-size:11vw;padding:6px 10px}
+.tirtop{display:flex;gap:10px;align-items:stretch}
+.stagewrap{flex:1;min-width:0}
+#side{width:104px;display:flex;flex-direction:column;font-variant-numeric:tabular-nums;font-size:13px;gap:2px}
+#side .it{display:flex;justify-content:space-between}
+#side .it b{font-weight:700}
+#side .ht{color:var(--mute)}
+#side .tot{margin-top:auto;border-top:1px solid var(--line);padding-top:6px;font-weight:700}
+#series{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:13px;font-variant-numeric:tabular-nums;min-height:18px}
+#series span b{color:var(--accent)}
+#conseil{font-size:13px;color:var(--accent);min-height:0}
+#chrono{font-size:26px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+#chrono small{display:block;font-size:12px;font-weight:500;color:var(--mute)}
+.btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.btns button{text-align:center;padding:14px 6px;font-weight:600}
+.mini{display:flex;justify-content:center;padding-bottom:6px}
+.mini button{padding:6px 14px;font-size:13px;color:var(--mute)}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 90px);background:#222a35;border:1px solid var(--line);
+  border-radius:10px;padding:10px 14px;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+#parking,#vid{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden}
+</style>
+</head>
+<body>
+<main>
+  <section id="v-home" class="view">
+    <header class="top"><h1>Tir</h1></header>
+    <div class="scroll">
+      <h2>10 m</h2><div class="list" id="l10"></div>
+      <h2>25 m</h2><div class="list" id="l25"></div>
+      <h2>Réglages</h2>
+      <div class="list">
+        <button data-go="reglage">Réglage cible</button>
+        <button data-go="munition">Munition 25 m</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-reglage" class="view" hidden>
+    <header class="top"><button class="back" data-go="home">‹</button><h1>Réglage cible</h1></header>
+    <div class="scroll">
+      <div class="row"><span>Cible</span><div class="seg" id="segDist"><button data-d="10m">10 m</button><button data-d="25m">25 m</button></div></div>
+      <div id="mount-reglage"></div>
+      <p class="hint">Fais glisser l'image et règle le zoom jusqu'à ce que l'anneau extérieur imprimé (anneau 1) coïncide avec le grand cercle tracé. Le centre de la cible doit être au centre du carré. Fixe le téléphone sur un trépied.</p>
+      <label>Zoom <input id="zoom" type="range" min="1" max="6" step="0.05"></label>
+      <div class="row"><span>Comptage</span><div class="seg" id="segDec"><button data-v="1">Décimal</button><button data-v="0">Arrondi</button></div></div>
+      <label>Sensibilité de détection <input id="sens" type="range" min="12" max="45" step="1"></label>
+      <h2>Durées des épreuves de précision</h2>
+      <div id="durees" class="list"></div>
+      <button class="primary" id="valider">Valider</button>
+    </div>
+  </section>
+
+  <section id="v-munition" class="view" hidden>
+    <header class="top"><button class="back" data-go="home">‹</button><h1>Munition 25 m</h1></header>
+    <div class="scroll">
+      <label>Calibre
+        <select id="calibre"></select>
+      </label>
+      <p class="hint">Le diamètre du projectile sert à tracer l'impact à sa taille réelle et à compter le coup dès que son bord touche l'anneau.</p>
+      <button class="primary" data-go="home">Valider</button>
+    </div>
+  </section>
+
+  <section id="v-tir" class="view" hidden>
+    <header class="top"><button class="back" data-go="home">‹</button><h1 id="tirTitle"></h1><span id="stat" class="stat"></span></header>
+    <div class="tirtop"><div id="mount-tir" class="stagewrap"></div><aside id="side"></aside></div>
+    <div id="series"></div>
+    <div id="conseil"></div>
+    <div id="chrono"></div>
+    <div class="btns">
+      <button id="bDepart" class="primary">Départ série</button>
+      <button id="bReset" class="danger">Remise à 0</button>
+      <button id="bGroup">Groupement</button>
+    </div>
+    <div class="mini"><button id="bUndo">Annuler le dernier impact</button></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<video id="vid" playsinline muted autoplay></video>
+<div id="parking">
+  <div id="stage"><canvas id="cv" width="640" height="640"></canvas><canvas id="ov" width="640" height="640"></canvas><div id="stageText"></div></div>
+</div>
+
+<script>
+'use strict';
+//<CORE>
+/* ---------- Géométrie et score ---------- */
+// Dimensions ISSF à valider avec les fiches officielles.
+const GEO = {
+  '10m': { r10: 5.75, pas: 8,  diamAnneau1: 155.5 },
+  '25m': { r10: 25,   pas: 25, diamAnneau1: 500 }
+};
+const FIT = 0.9; // l'anneau 1 occupe 90 % du carré
+const cadreMm = d => GEO[d].diamAnneau1 / FIT;
+
+function calculerScore(x, y, calibre, dist) {
+  const g = GEO[dist];
+  const dEff = Math.max(0, Math.hypot(x, y) - calibre / 2);
+  if (dEff <= g.r10) {
+    const dix = Math.min(9, Math.floor((1 - dEff / g.r10) * 10));
+    return { entier: 10, decimal: 10 + dix / 10 };
+  }
+  const anneau = 10 - Math.ceil((dEff - g.r10) / g.pas);
+  if (anneau < 1) return { entier: 0, decimal: 0 };
+  const dans = ((dEff - g.r10) % g.pas) || g.pas;
+  const dix = Math.min(9, Math.floor((1 - dans / g.pas) * 10));
+  return { entier: anneau, decimal: anneau + dix / 10 };
+}
+
+/* ---------- Machine à états du tir standard ---------- */
+const CFG = { bleuS: 50, rougeS: 10, tirS: 10, coups: 5, series: 8 };
+const etatInitial = () => ({ phase: 'repos', serie: 0, debut: 0 });
+function departSerie(e, now) {
+  if ((e.phase !== 'repos' && e.phase !== 'pause') || e.serie >= CFG.series) return e;
+  return { phase: 'bleu', serie: e.serie + 1, debut: now };
+}
+function tickEtat(e, now) {
+  const s = (now - e.debut) / 1000;
+  if (e.phase === 'bleu'  && s >= CFG.bleuS)  return { ...e, phase: 'rouge', debut: e.debut + CFG.bleuS * 1000 };
+  if (e.phase === 'rouge' && s >= CFG.rougeS) return { ...e, phase: 'tir',   debut: e.debut + CFG.rougeS * 1000 };
+  if (e.phase === 'tir'   && s >= CFG.tirS)   return { ...e, phase: e.serie >= CFG.series ? 'termine' : 'pause', debut: e.debut + CFG.tirS * 1000 };
+  return e;
+}
+function affichage(e, now) {
+  const s = (now - e.debut) / 1000;
+  if (e.phase === 'bleu')  return { teinte: 'bleu',  decompte: Math.ceil(CFG.bleuS + CFG.rougeS - s) };
+  if (e.phase === 'rouge') return { teinte: 'rouge', decompte: null };
+  if (e.phase === 'tir')   return { teinte: null,    decompte: Math.max(0, Math.ceil(CFG.tirS - s)) };
+  return { teinte: null, decompte: null };
+}
+/** Impact hors temps ? tFirst = instant de première apparition de l'impact. */
+function horsTemps(tFirst, e, latence = 100) {
+  if (e.phase === 'tir') return false;
+  if (e.phase === 'pause' || e.phase === 'termine') return (tFirst - latence) > e.debut; // debut = fin du tir
+  return true;
+}
+
+/* ---------- Groupement ---------- */
+function analyserGroupement(imps) {
+  if (imps.length < 2) return null;
+  const cx = imps.reduce((s, i) => s + i.x, 0) / imps.length;
+  const cy = imps.reduce((s, i) => s + i.y, 0) / imps.length;
+  let etendue = 0;
+  for (let a = 0; a < imps.length; a++) for (let b = a + 1; b < imps.length; b++)
+    etendue = Math.max(etendue, Math.hypot(imps[a].x - imps[b].x, imps[a].y - imps[b].y));
+  const seuil = 2;
+  const v = Math.abs(cy) > seuil ? (cy > 0 ? 'haut' : 'bas') : '';
+  const h = Math.abs(cx) > seuil ? (cx > 0 ? 'droite' : 'gauche') : '';
+  const dir = v && h ? v + ' ' + h : (v || h || 'centre');
+  const parts = [];
+  if (v) parts.push((v === 'haut' ? 'baisser' : 'monter') + ' la hausse');
+  if (h) parts.push('ramener la dérive vers la ' + (h === 'droite' ? 'gauche' : 'droite'));
+  const conseil = dir === 'centre' ? 'Groupement centré, aucun réglage nécessaire.'
+    : 'Groupement ' + dir + ' : ' + parts.join(' et ') + '.';
+  return { cx, cy, ecart: Math.hypot(cx, cy), etendue, conseil };
+}
+//</CORE>
+
+//<DETECTOR>
+/* ---------- Détection d'impacts par différence d'images ---------- */
+function createDetector(N) {
+  const NN = N * N;
+  const ref = new Float32Array(NN), cur = new Float32Array(NN), tmp = new Float32Array(NN);
+  const mk = new Uint8Array(NN), dil = new Uint8Array(NN), seen = new Uint8Array(NN);
+  const stack = new Int32Array(NN);
+  const hist = new Int32Array(512);
+  const P = { thr: 22, diamPx: 16, learn: 4 };
+  let state = 'learning', learnN = 0, cand = null, cool = 0, motion = 0;
+
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  function blur(g) {
+    for (let y = 0; y < N; y++) { const r = y * N;
+      for (let x = 0; x < N; x++) {
+        const a = x > 0 ? g[r + x - 1] : g[r + x], c = x < N - 1 ? g[r + x + 1] : g[r + x];
+        tmp[r + x] = (a + g[r + x] + c) / 3;
+      } }
+    for (let y = 0; y < N; y++) { const r = y * N, u = (y > 0 ? y - 1 : y) * N, d = (y < N - 1 ? y + 1 : y) * N;
+      for (let x = 0; x < N; x++) cur[r + x] = (tmp[u + x] + tmp[r + x] + tmp[d + x]) / 3; }
+  }
+  function median(binOf) {
+    hist.fill(0); let n = 0;
+    for (let i = 0; i < NN; i += 5) { hist[binOf(i)]++; n++; }
+    let acc = 0;
+    for (let b = 0; b < 512; b++) { acc += hist[b]; if (acc >= n / 2) return b; }
+    return 0;
+  }
+  function adapt() { for (let i = 0; i < NN; i++) ref[i] += 0.03 * (cur[i] - ref[i]); }
+  function relearn() { state = 'learning'; learnN = 0; cand = null; motion = 0; cool = 0; }
+
+  function process(g, t) {
+    blur(g);
+    if (state === 'learning') {
+      if (learnN === 0) ref.set(cur);
+      else { const k = 1 / (learnN + 1); for (let i = 0; i < NN; i++) ref[i] += (cur[i] - ref[i]) * k; }
+      learnN++; if (learnN >= P.learn) state = 'watching';
+      return { status: 'learning' };
+    }
+    if (cool > 0) { cool--; return { status: 'idle' }; }
+
+    const off = median(i => clamp(Math.round(cur[i] - ref[i]) + 256, 0, 511)) - 256;
+    const mad = median(i => clamp(Math.round(Math.abs(cur[i] - ref[i] - off)), 0, 255));
+    const thr = Math.max(P.thr, 5 * 1.4826 * mad);
+
+    let count = 0;
+    for (let i = 0; i < NN; i++) { const m = Math.abs(cur[i] - ref[i] - off) > thr ? 1 : 0; mk[i] = m; count += m; }
+    if (count > 0.02 * NN) {           // main, ombre, bougé : on n'évalue rien
+      cand = null; motion++;
+      if (motion >= 40) { relearn(); return { status: 'recalage' }; }
+      return { status: 'motion' };
+    }
+    motion = 0;
+    if (count < 3) { adapt(); cand = null; return { status: 'idle' }; }
+
+    // fermeture morphologique (dilatation 3x3) : comble les micro-vides dans le trou
+    dil.fill(0);
+    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+      const i = y * N + x;
+      if (mk[i]) { dil[i - N - 1] = dil[i - N] = dil[i - N + 1] = dil[i - 1] = dil[i] = dil[i + 1] = dil[i + N - 1] = dil[i + N] = dil[i + N + 1] = 1; }
+    }
+    const aExp = Math.PI * Math.pow(P.diamPx / 2 + 1, 2);
+    seen.fill(0);
+    const comps = [];
+    for (let s = 0; s < NN; s++) {
+      if (!dil[s] || seen[s]) continue;
+      let sp = 0, area = 0, sx = 0, sy = 0, x0 = N, x1 = 0, y0 = N, y1 = 0;
+      stack[sp++] = s; seen[s] = 1;
+      while (sp) {
+        const i = stack[--sp], x = i % N, y = (i - x) / N;
+        area++; sx += x; sy += y;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (x > 0     && dil[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; stack[sp++] = i - 1; }
+        if (x < N - 1 && dil[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; stack[sp++] = i + 1; }
+        if (y > 0     && dil[i - N] && !seen[i - N]) { seen[i - N] = 1; stack[sp++] = i - N; }
+        if (y < N - 1 && dil[i + N] && !seen[i + N]) { seen[i + N] = 1; stack[sp++] = i + N; }
+      }
+      if (area >= 0.3 * aExp) comps.push({ area, x: sx / area, y: sy / area, x0, x1, y0, y1 });
+    }
+    if (comps.length === 0) { adapt(); cand = null; return { status: 'idle' }; }
+    if (comps.length > 1) { cand = null; return { status: 'ambigu' }; }
+    const c = comps[0], bw = c.x1 - c.x0 + 1, bh = c.y1 - c.y0 + 1;
+    const ok = c.area <= 3.5 * aExp && Math.max(bw, bh) / Math.min(bw, bh) <= 2 && c.area / (bw * bh) >= 0.5;
+    if (!ok) { cand = null; return { status: 'ambigu' }; }
+
+    if (cand && Math.hypot(c.x - cand.x, c.y - cand.y) <= 3.5 && Math.abs(c.area - cand.area) < 0.6 * cand.area) {
+      cand.n++; cand.x = (cand.x + c.x) / 2; cand.y = (cand.y + c.y) / 2; cand.area = c.area; cand.diam = (bw + bh) / 2 - 2;
+    } else cand = { x: c.x, y: c.y, area: c.area, n: 1, t0: t, diam: (bw + bh) / 2 - 2 };
+
+    if (cand.n >= 3 && t - cand.t0 >= 200) {
+      const imp = { px: cand.x, py: cand.y, t: cand.t0, diamPx: cand.diam };
+      ref.set(cur); cand = null; cool = 4;
+      return { status: 'impact', impact: imp };
+    }
+    return { status: 'candidat' };
+  }
+  return { process, relearn, setParams(p) { Object.assign(P, p); }, state: () => state };
+}
+//</DETECTOR>
+
+/* ================= Interface ================= */
+const $ = id => document.getElementById(id);
+const N = 640;
+const MODES = [
+  { id: '10-ent', dist: '10m', disc: 'entrainement', label: 'Entraînement 10 m', total: null },
+  { id: '10-p40', dist: '10m', disc: 'precision', label: 'Précision 10 m · 40 coups', total: 40, duree: 50 * 60 },
+  { id: '10-p60', dist: '10m', disc: 'precision', label: 'Précision 10 m · 60 coups', total: 60, duree: 75 * 60 },
+  { id: '10-std', dist: '10m', disc: 'standard',  label: 'Standard 10 m', total: CFG.coups * CFG.series },
+  { id: '25-ent', dist: '25m', disc: 'entrainement', label: 'Entraînement 25 m', total: null },
+  { id: '25-p10', dist: '25m', disc: 'precision', label: 'Précision 25 m · 10 coups', total: 10, duree: 5 * 60 },
+  { id: '25-std', dist: '25m', disc: 'standard',  label: 'Standard 25 m', total: CFG.coups * CFG.series }
+];
+const CALIBRES = [['.22 LR (5,6 mm)', 5.6], ['7,65 mm (7,9 mm)', 7.9], ['9 mm (9,0 mm)', 9.0], ['.38 (9,65 mm)', 9.65], ['.45 (11,43 mm)', 11.43]];
+
+const DEF = {
+  decimal: true, calibre25: 5.6, sens: 22,
+  cadre: { '10m': { zoom: 1.5, cx: .5, cy: .5 }, '25m': { zoom: 1.5, cx: .5, cy: .5 } },
+  durees: {}
+};
+MODES.filter(m => m.duree).forEach(m => DEF.durees[m.id] = m.duree);
+function loadReg() {
+  try { const r = JSON.parse(localStorage.getItem('tir-reglages')); if (r) return { ...DEF, ...r, cadre: { ...DEF.cadre, ...r.cadre }, durees: { ...DEF.durees, ...r.durees } }; } catch (e) {}
+  return JSON.parse(JSON.stringify(DEF));
+}
+function saveReg() { try { localStorage.setItem('tir-reglages', JSON.stringify(S.reg)); } catch (e) {} }
+
+const S = { view: 'home', reg: loadReg(), mode: null, regDist: '10m', impacts: [], etat: etatInitial(), t0: null,
+            group: false, armed: false, status: '', lastPhase: 'repos', finished: false };
+const det = createDetector(N);
+const vid = $('vid'), cv = $('cv'), ov = $('ov'), stage = $('stage'), stageText = $('stageText');
+const cctx = cv.getContext('2d', { willReadFrequently: true }), octx = ov.getContext('2d');
+const gray = new Float32Array(N * N);
+
+const distNow = () => S.mode ? S.mode.dist : S.regDist;
+const calibreNow = () => distNow() === '10m' ? 4.5 : S.reg.calibre25;
+const mmpp = () => cadreMm(distNow()) / N;
+function applyDetParams() { det.setParams({ thr: S.reg.sens, diamPx: calibreNow() / mmpp() }); }
+
+let toastT = 0;
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 2200); }
+let actx = null;
+function beep(f, d) { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), g = actx.createGain();
+  o.frequency.value = f; g.gain.value = .25; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + d); } catch (e) {} }
+let wake = null;
+async function keepAwake() { try { if (navigator.wakeLock && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } } catch (e) {} }
+
+/* ----- Caméra ----- */
+let stream = null;
+async function startCam() {
+  if (stream) return true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Caméra indisponible : ouvre la page en HTTPS dans Safari.'); return false; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    vid.srcObject = stream; await vid.play();
+    try { await stream.getVideoTracks()[0].applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (e) {}
+    return true;
+  } catch (e) { toast('Accès caméra refusé : Réglages > Safari > Caméra.'); return false; }
+}
+function stopCam() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } vid.srcObject = null; }
+
+const cad = () => S.reg.cadre[distNow()];
+function cropRect() {
+  const vw = vid.videoWidth, vh = vid.videoHeight, c = cad();
+  const side = Math.min(vw, vh) / c.zoom;
+  c.cx = Math.max(side / 2 / vw, Math.min(1 - side / 2 / vw, c.cx));
+  c.cy = Math.max(side / 2 / vh, Math.min(1 - side / 2 / vh, c.cy));
+  return [c.cx * vw - side / 2, c.cy * vh - side / 2, side];
+}
+
+/* ----- Impacts ----- */
+const comptes = () => S.impacts.filter(i => !i.ht);
+const serieCount = s => S.impacts.filter(i => !i.ht && i.serie === s).length;
+
+function accepter(x, y, t) {
+  const m = S.mode; if (!m) return;
+  let ht = false;
+  if (m.disc === 'precision') {
+    if (S.t0 === null) { toast('Impact ignoré : le chrono n\'est pas lancé.'); return; }
+    if ((t - S.t0) / 1000 > S.reg.durees[m.id]) ht = true;
+  } else if (m.disc === 'standard') {
+    ht = horsTemps(t, S.etat) || (S.etat.phase === 'tir' && serieCount(S.etat.serie) >= CFG.coups);
+  }
+  if (m.total && comptes().length >= m.total && !ht) { toast('Épreuve terminée.'); return; }
+  const sc = ht ? { entier: 0, decimal: 0 } : calculerScore(x, y, calibreNow(), m.dist);
+  S.impacts.push({ x, y, t, ht, sc, serie: S.etat.serie });
+  if (ht) toast('Impact hors temps');
+  if (m.total && comptes().length >= m.total) { S.finished = true; toast('Épreuve terminée.'); }
+  render();
+}
+function impactPx(px, py, t) { const k = mmpp(); accepter((px - N / 2) * k, -(py - N / 2) * k, t); }
+
+/* ----- Boucle ----- */
+function grab(now) {
+  const [sx, sy, side] = cropRect();
+  cctx.drawImage(vid, sx, sy, side, side, 0, 0, N, N);
+  if (S.view === 'tir' && S.armed) {
+    const d = cctx.getImageData(0, 0, N, N).data;
+    for (let i = 0, j = 0; i < gray.length; i++, j += 4) gray[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+    const r = det.process(gray, now);
+    S.status = { learning: 'Calibrage…', idle: 'Surveillance', candidat: 'Impact ?', motion: 'Mouvement', ambigu: 'Zone ambiguë', recalage: 'Recalage image', impact: 'Impact détecté' }[r.status] || '';
+    if (r.status === 'impact') impactPx(r.impact.px, r.impact.py, r.impact.t);
+  }
+}
+
+function step() {
+  const now = performance.now();
+  if (S.mode && S.mode.disc === 'standard') {
+    const prev = S.etat.phase; S.etat = tickEtat(S.etat, now);
+    if (S.etat.phase !== prev) {
+      if (S.etat.phase === 'tir') beep(1000, .5);
+      if (S.etat.phase === 'pause' || S.etat.phase === 'termine') { beep(600, .2); setTimeout(() => beep(600, .2), 300); }
+    }
+  }
+  if (S.view !== 'home' && stream && vid.readyState >= 2) grab(now);
+  if (S.view === 'tir') updateTir(now);
+  drawOverlay(now);
+}
+setInterval(step, 100);
+
+/* ----- Dessin ----- */
+function drawOverlay(now) {
+  octx.clearRect(0, 0, N, N);
+  const d = distNow(), g = GEO[d], k = 1 / mmpp(), c = N / 2;
+  const strong = S.view === 'reglage';
+  const aff = (S.view === 'tir' && S.mode.disc === 'standard') ? affichage(S.etat, now) : { teinte: null, decompte: null };
+  if (aff.teinte) { octx.fillStyle = aff.teinte === 'bleu' ? 'rgba(31,111,235,.55)' : 'rgba(209,36,47,.6)'; octx.fillRect(0, 0, N, N); }
+  octx.lineWidth = strong ? 2 : 1.2;
+  octx.strokeStyle = strong ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.35)';
+  for (let n = 10; n >= 1; n--) { octx.beginPath(); octx.arc(c, c, (g.r10 + (10 - n) * g.pas) * k, 0, 7); octx.stroke(); }
+  if (strong) { octx.beginPath(); octx.moveTo(c - 20, c); octx.lineTo(c + 20, c); octx.moveTo(c, c - 20); octx.lineTo(c, c + 20); octx.stroke(); }
+  if (S.view !== 'tir') return;
+  const all = S.impacts;
+  let vis;
+  if (S.group) vis = all.filter(i => !i.ht);
+  else if (S.mode.disc === 'standard') { const s = all.length ? all[all.length - 1].serie : 0; vis = all.filter(i => i.serie === s); }
+  else { const cs = comptes(), n = cs.length, deb = Math.floor(Math.max(0, n - 1) / CFG.coups) * CFG.coups; vis = cs.slice(deb); }
+  const rr = Math.max(3, calibreNow() / 2 * k);
+  vis.forEach((i, idx) => {
+    const last = !S.group && idx === vis.length - 1;
+    octx.beginPath(); octx.arc(c + i.x * k, c - i.y * k, rr, 0, 7);
+    octx.fillStyle = i.ht ? 'rgba(150,150,150,.8)' : last ? '#ff3b3b' : '#3d8bff'; octx.fill();
+    octx.lineWidth = 1.2; octx.strokeStyle = '#fff'; octx.stroke();
+  });
+  if (S.group) {
+    const gr = analyserGroupement(comptes());
+    if (gr) {
+      octx.strokeStyle = '#3fb950'; octx.fillStyle = '#3fb950'; octx.lineWidth = 3;
+      const gx = c + gr.cx * k, gy = c - gr.cy * k;
+      octx.beginPath(); octx.moveTo(c, c); octx.lineTo(gx, gy); octx.stroke();
+      octx.beginPath(); octx.arc(gx, gy, 7, 0, 7); octx.fill();
+    }
+  }
+}
+
+/* ----- Vues ----- */
+function mount(id) { $(id).appendChild(stage); }
+async function go(v, mode) {
+  S.view = v;
+  for (const el of document.querySelectorAll('.view')) el.hidden = el.id !== 'v-' + v;
+  if (v === 'home') { stopCam(); S.armed = false; S.mode = null; if (wake) { wake.release(); } return; }
+  if (v === 'reglage') { mount('mount-reglage'); S.mode = null; refreshReglage(); await startCam(); applyDetParams(); }
+  if (v === 'munition') { stopCam(); S.armed = false; }
+  if (v === 'tir') {
+    S.mode = mode; S.impacts = []; S.etat = etatInitial(); S.t0 = null; S.group = false; S.finished = false;
+    $('tirTitle').textContent = mode.label;
+    mount('mount-tir'); stage.style.aspectRatio = '1'; applyDetParams();
+    $('bDepart').hidden = mode.disc === 'entrainement';
+    keepAwake();
+    if (await startCam()) { det.relearn(); S.armed = true; }
+    render();
+  }
+}
+
+const fmt = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const val = sc => S.reg.decimal ? sc.decimal.toFixed(1) : String(sc.entier);
+
+function render() {
+  if (S.view !== 'tir') return;
+  const cs = comptes(), last10 = cs.slice(-10).reverse();
+  const hts = S.impacts.length - cs.length;
+  const totD = cs.reduce((a, i) => a + i.sc.decimal, 0), totE = cs.reduce((a, i) => a + i.sc.entier, 0);
+  $('side').innerHTML = last10.map((i, k) => `<div class="it"><span>${cs.length - k}.</span><b>${val(i.sc)}</b>${S.reg.decimal ? `<span>${i.sc.entier}</span>` : ''}</div>`).join('')
+    + (hts ? `<div class="it ht"><span>Hors temps</span><b>${hts}</b></div>` : '')
+    + `<div class="tot">Σ ${totD.toFixed(1)}<br>Σ ${totE}</div>`;
+  let h = '';
+  for (let i = 0; i < cs.length; i += 10) {
+    const part = cs.slice(i, i + 10);
+    h += `<span>S${i / 10 + 1} <b>${part.reduce((a, x) => a + x.sc.decimal, 0).toFixed(1)}</b>/${part.reduce((a, x) => a + x.sc.entier, 0)}</span>`;
+  }
+  $('series').innerHTML = h;
+  $('bGroup').textContent = S.group ? 'Masquer' : 'Groupement';
+  const gr = S.group ? analyserGroupement(cs) : null;
+  $('conseil').textContent = gr ? `${gr.conseil} Écart ${gr.ecart.toFixed(1)} mm, étendue ${gr.etendue.toFixed(1)} mm.` : (S.group ? 'Pas assez d\'impacts.' : '');
+}
+
+function updateTir(now) {
+  const m = S.mode; let ch = '', sub = '', st = '';
+  stageText.textContent = ''; stageText.className = '';
+  if (m.disc === 'entrainement') { ch = 'Non chronométré'; }
+  else if (m.disc === 'precision') {
+    if (S.t0 === null) { ch = fmt(S.reg.durees[m.id]); sub = 'Appuie sur Départ'; }
+    else { const e = (now - S.t0) / 1000, r = Math.max(0, S.reg.durees[m.id] - e); ch = fmt(r); sub = `Écoulé ${fmt(e)}`; }
+    $('bDepart').textContent = 'Départ chrono'; $('bDepart').disabled = S.t0 !== null;
+  } else {
+    const a = affichage(S.etat, now), e = S.etat, lab = { repos: 'Prêt', bleu: 'Préparation', rouge: 'Attention', tir: 'Tir !', pause: 'Pause', termine: 'Terminé' }[e.phase];
+    ch = a.decompte != null ? String(a.decompte) + ' s' : lab; sub = e.serie ? `Série ${e.serie}/${CFG.series} · ${lab}` : `8 séries de ${CFG.coups} coups`;
+    if (e.phase === 'bleu' && a.decompte > CFG.rougeS) stageText.textContent = a.decompte;
+    if (e.phase === 'tir') { stageText.textContent = a.decompte; stageText.className = 'small'; }
+    const prochain = e.serie + 1;
+    $('bDepart').textContent = e.phase === 'termine' ? 'Terminé' : `Départ série ${Math.min(prochain, CFG.series)}`;
+    $('bDepart').disabled = !(e.phase === 'repos' || e.phase === 'pause');
+  }
+  $('chrono').innerHTML = `${ch}<small>${sub}</small>`;
+  $('stat').textContent = S.armed ? S.status : '';
+}
+
+/* ----- Réglage ----- */
+function refreshReglage() {
+  const d = S.regDist;
+  document.querySelectorAll('#segDist button').forEach(b => b.classList.toggle('on', b.dataset.d === d));
+  document.querySelectorAll('#segDec button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === S.reg.decimal));
+  $('zoom').value = S.reg.cadre[d].zoom; $('sens').value = S.reg.sens;
+  $('durees').innerHTML = '';
+  MODES.filter(m => m.duree).forEach(m => {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<span>${m.label.replace('Précision ', '')}</span><div class="stepper"><button data-m="${m.id}" data-s="-1">−</button><b>${Math.round(S.reg.durees[m.id] / 60)} min</b><button data-m="${m.id}" data-s="1">+</button></div>`;
+    $('durees').appendChild(row);
+  });
+}
+document.querySelectorAll('#segDist button').forEach(b => b.onclick = () => { S.regDist = b.dataset.d; refreshReglage(); applyDetParams(); });
+document.querySelectorAll('#segDec button').forEach(b => b.onclick = () => { S.reg.decimal = b.dataset.v === '1'; refreshReglage(); });
+$('zoom').oninput = e => { S.reg.cadre[S.regDist].zoom = +e.target.value; };
+$('sens').oninput = e => { S.reg.sens = +e.target.value; };
+$('durees').onclick = e => { const b = e.target.closest('button'); if (!b) return;
+  const id = b.dataset.m; S.reg.durees[id] = Math.max(60, S.reg.durees[id] + 300 * +b.dataset.s); refreshReglage(); };
+$('valider').onclick = () => { saveReg(); go('home'); };
+
+/* ----- Munition ----- */
+$('calibre').innerHTML = CALIBRES.map(([l, v]) => `<option value="${v}">${l}</option>`).join('');
+$('calibre').value = String(S.reg.calibre25);
+$('calibre').onchange = e => { S.reg.calibre25 = +e.target.value; saveReg(); };
+
+/* ----- Accueil ----- */
+for (const m of MODES) {
+  const b = document.createElement('button'); b.textContent = m.label; b.onclick = () => go('tir', m);
+  $(m.dist === '10m' ? 'l10' : 'l25').appendChild(b);
+}
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+
+/* ----- Boutons de tir ----- */
+$('bDepart').onclick = () => {
+  const m = S.mode; beep(800, .12);
+  if (m.disc === 'precision' && S.t0 === null) S.t0 = performance.now();
+  if (m.disc === 'standard') S.etat = departSerie(S.etat, performance.now());
+};
+let resetT = 0;
+$('bReset').onclick = () => {
+  const b = $('bReset');
+  if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Confirmer ?'; resetT = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Remise à 0'; }, 3000); return; }
+  clearTimeout(resetT); b.classList.remove('armed'); b.textContent = 'Remise à 0';
+  S.impacts = []; S.etat = etatInitial(); S.t0 = null; S.group = false; S.finished = false; det.relearn(); render();
+};
+$('bGroup').onclick = () => { S.group = !S.group; render(); };
+$('bUndo').onclick = () => { S.impacts.pop(); S.finished = false; render(); };
+
+/* ----- Gestes sur la cible ----- */
+let drag = null, lastTap = 0;
+stage.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', e => {
+  if (!drag || S.view !== 'reglage' || !stream) return;
+  const r = stage.getBoundingClientRect(), [, , side] = cropRect(), c = cad(), k = side / r.width;
+  c.cx -= (e.clientX - drag.x) * k / vid.videoWidth; c.cy -= (e.clientY - drag.y) * k / vid.videoHeight;
+  drag.x = e.clientX; drag.y = e.clientY;
+});
+stage.addEventListener('pointerup', e => {
+  if (S.view === 'tir') {            // double-tap : ajout manuel d'un impact
+    const now = performance.now();
+    if (now - lastTap < 350) { const r = stage.getBoundingClientRect(); impactPx((e.clientX - r.left) / r.width * N, (e.clientY - r.top) / r.height * N, now); lastTap = 0; }
+    else lastTap = now;
+  }
+  drag = null;
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'tir') keepAwake(); });
+</script>
+</body>
+</html>
